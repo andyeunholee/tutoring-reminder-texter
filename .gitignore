@@ -1,0 +1,14 @@
+credentials.json
+token*.json
+.env
+playwright_user_data/
+debug_screenshots/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
