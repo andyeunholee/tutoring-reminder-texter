@@ -74,6 +74,7 @@ ss.setdefault("messages", [])
 ss.setdefault("results", {})       # key -> {"status": ..., "error": ...}
 ss.setdefault("run_log", [])
 ss.setdefault("searched_day", None)
+ss.setdefault("autosearch_done", False)
 
 
 # ---------- sidebar ----------
@@ -129,13 +130,33 @@ with st.sidebar:
 
 st.title("📅 Tutoring Reminder Texter")
 
+def requested_day() -> date:
+    """Which date to show first. ?date=YYYY-MM-DD wins, else tomorrow."""
+    raw = st.query_params.get("date")
+    if raw:
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            pass
+    return date.today() + timedelta(days=1)
+
+
 col1, col2 = st.columns([2, 1])
 with col1:
-    day = st.date_input("Session date", value=date.today() + timedelta(days=1))
+    day = st.date_input("Session date", value=requested_day())
 with col2:
     st.write("")
     st.write("")
-    do_search = st.button("🔍 Search calendar", type="primary", use_container_width=True)
+    search_clicked = st.button("🔍 Search calendar", type="primary", use_container_width=True)
+
+# ?auto=1 (used by the 4pm scheduled task) searches straight away, so the page
+# is already showing tomorrow's messages when it appears on screen.
+auto_search = (str(st.query_params.get("auto", "")).lower() in ("1", "true", "yes")
+               and not ss.autosearch_done)
+if auto_search:
+    ss.autosearch_done = True
+
+do_search = search_clicked or auto_search
 
 if do_search:
     if not spreadsheet_id:

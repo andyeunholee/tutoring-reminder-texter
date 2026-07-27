@@ -21,12 +21,16 @@ if not defined PY (
 echo [1/5] Python found: %PY%
 %PY% --version
 
-REM ---- 2. virtual environment --------------------------------------------
-if exist ".venv\Scripts\python.exe" (
-  echo [2/5] .venv already exists - reusing it
+REM ---- 2. virtual environment ---------------------------------------------
+REM Deliberately on local disk, never inside this Google Drive folder: reading
+REM 13,000+ package files through Drive makes every launch ~7x slower.
+set "VENV=%LOCALAPPDATA%\TutoringReminder\venv"
+if exist "%VENV%\Scripts\python.exe" (
+  echo [2/5] Environment already exists - reusing it
 ) else (
-  echo [2/5] Creating .venv ...
-  %PY% -m venv .venv
+  echo [2/5] Creating the environment on your local disk ...
+  echo       %VENV%
+  %PY% -m venv "%VENV%"
   if errorlevel 1 (
     echo [X] Could not create the virtual environment.
     goto :end
@@ -35,8 +39,8 @@ if exist ".venv\Scripts\python.exe" (
 
 REM ---- 3. dependencies ----------------------------------------------------
 echo [3/5] Installing Python packages ^(this can take a few minutes^) ...
-".venv\Scripts\python.exe" -m pip install --upgrade pip -q
-".venv\Scripts\pip.exe" install -r requirements.txt -q
+"%VENV%\Scripts\python.exe" -m pip install --upgrade pip -q
+"%VENV%\Scripts\pip.exe" install -r requirements.txt -q
 if errorlevel 1 (
   echo [X] Package install failed. If it mentions "greenlet", install Python 3.12
   echo     and run this script again.
@@ -44,7 +48,7 @@ if errorlevel 1 (
 )
 
 echo [4/5] Installing the browser engine ...
-".venv\Scripts\python.exe" -m playwright install chromium
+"%VENV%\Scripts\python.exe" -m playwright install chromium
 if errorlevel 1 (
   echo [!] Browser engine install failed - sending may not work.
 )
