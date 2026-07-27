@@ -49,6 +49,29 @@
    브라우저 프로필은 `%LOCALAPPDATA%\TutoringReminder\gv_profile`에 저장됩니다
    (Google Drive 폴더에 두면 프로필이 깨져서 로컬 디스크를 씁니다).
 
+## 다른 PC에서 설치하기
+
+```
+git clone https://github.com/andyeunholee/tutoring-reminder-texter.git
+cd tutoring-reminder-texter
+setup_new_pc.bat
+```
+
+`setup_new_pc.bat`이 Python 확인 → 가상환경 생성 → 패키지·브라우저 설치까지
+자동으로 하고, **손으로 해야 할 남은 일을 화면에 알려줍니다.**
+
+저장소에 없는 것 (보안상 일부러 제외):
+
+| 파일 | 어떻게 |
+|---|---|
+| `credentials.json` | 기존 PC에서 USB로 복사 ⚠️ 이메일·채팅 금지 |
+| `.env`의 `ROSTER_SPREADSHEET_ID` | 기존 PC의 `.env`에서 값만 복사, 또는 `create_roster_sheet.bat` 실행 |
+| Google 계정 동의 | PC마다 한 번씩 (앱 첫 검색 시 자동으로 뜸) |
+| Google Voice 로그인 | PC마다 한 번씩 `login_google_voice.bat` |
+
+토큰 파일(`token_*.json`)은 PC 간에 옮기지 마세요. 각 PC에서 새로 받는 것이
+안전합니다. Google Chrome도 설치돼 있어야 합니다.
+
 ## 매일 사용법
 
 ```
