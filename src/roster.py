@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import difflib
 import re
+import time
 import unicodedata
 from dataclasses import dataclass, field
 
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from src.tut_parser import MARKER_RE, PARENS_RE, TEACHER_SUFFIX_RE
 
@@ -187,16 +189,59 @@ def build_roster(teacher_rows: list[list], student_rows: list[list],
     return roster
 
 
-def load_roster(credentials, spreadsheet_id: str, ranges: dict[str, str]) -> Roster:
+class RosterUnavailable(RuntimeError):
+    """Google Sheets could not be read right now (outage, quota, network)."""
+
+
+def load_roster(credentials, spreadsheet_id: str, ranges: dict[str, str],
+                *, attempts: int = 4) -> Roster:
+    """Read the roster, retrying transient Google failures with backoff.
+
+    Sheets occasionally returns 503/500 on the values endpoint while the rest
+    of the API is healthy. Retrying rides out the short ones; a persistent
+    failure is surfaced as RosterUnavailable so the UI can say what is wrong
+    instead of dumping a stack trace.
+    """
     service = build("sheets", "v4", credentials=credentials)
-    resp = (
-        service.spreadsheets()
-        .values()
-        .batchGet(spreadsheetId=spreadsheet_id,
-                  ranges=[ranges["teachers"], ranges["students"], ranges["aliases"]])
-        .execute()
-    )
+    delay, last = 2.0, None
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = (
+                service.spreadsheets()
+                .values()
+                .batchGet(spreadsheetId=spreadsheet_id,
+                          ranges=[ranges["teachers"], ranges["students"],
+                                  ranges["aliases"]])
+                .execute()
+            )
+            break
+        except HttpError as e:
+            last = e
+            if e.resp.status not in (429, 500, 502, 503, 504) or attempt == attempts:
+                raise RosterUnavailable(_roster_error_text(e)) from e
+            time.sleep(delay)
+            delay *= 2
+    else:  # pragma: no cover - loop always breaks or raises
+        raise RosterUnavailable(_roster_error_text(last))
+
     value_ranges = resp.get("valueRanges", [])
     def vals(i):
         return value_ranges[i].get("values", []) if i < len(value_ranges) else []
     return build_roster(vals(0), vals(1), vals(2))
+
+
+def _roster_error_text(err) -> str:
+    status = getattr(getattr(err, "resp", None), "status", None)
+    if status in (500, 502, 503, 504):
+        return ("Google Sheets is temporarily unavailable (error "
+                f"{status}). This is an outage on Google's side, not a problem "
+                "with your roster. Wait a few minutes and search again.")
+    if status == 429:
+        return ("Google Sheets rate limit reached. Wait a minute and search "
+                "again.")
+    if status == 403:
+        return ("No permission to read the roster sheet. Check that the "
+                "signed-in Google account can open it.")
+    if status == 404:
+        return ("Roster sheet not found. Check ROSTER_SPREADSHEET_ID in .env.")
+    return f"Could not read the roster sheet: {err}"

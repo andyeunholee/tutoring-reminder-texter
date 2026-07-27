@@ -17,7 +17,7 @@ import config
 from src.auth import get_credentials
 from src.calendar_service import TutoringCalendarService
 from src.message_builder import build_messages
-from src.roster import load_roster
+from src.roster import RosterUnavailable, load_roster
 from sms.gv_sender import normalize_phone_number
 
 st.set_page_config(page_title="Tutoring Reminder Texter", page_icon="📅", layout="wide")
@@ -134,6 +134,12 @@ day = ss.searched_day
 # rebuild messages every run so sidebar toggles apply (drafts survive via setdefault)
 try:
     roster = cached_roster(spreadsheet_id)
+except RosterUnavailable as e:
+    st.error(str(e))
+    if st.button("Try again"):
+        cached_roster.clear()
+        st.rerun()
+    st.stop()
 except Exception as e:
     st.error(f"Roster load failed: {e}")
     st.stop()
