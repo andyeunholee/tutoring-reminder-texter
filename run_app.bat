@@ -31,7 +31,7 @@ if not errorlevel 1 (
 REM Open the browser once the server is actually listening, so the user never
 REM lands on an error page. Streamlit's own auto-open does not fire when the
 REM window is started minimised from a desktop shortcut.
-start "" /b "%~dp0_open_browser.bat"
+start "" /b cmd /c "%~dp0_open_browser.bat"
 
 ".venv\Scripts\python.exe" -m streamlit run app.py --server.headless true
 
