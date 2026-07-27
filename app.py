@@ -6,6 +6,7 @@ message building in src/message_builder.py, sending in sms/.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,25 @@ from sms.gv_sender import normalize_phone_number
 st.set_page_config(page_title="Tutoring Reminder Texter", page_icon="📅", layout="wide")
 
 RUNNER = str(config.BASE_DIR / "sms" / "sms_job_runner.py")
+
+
+def parse_redirect(text: str) -> tuple[list[str], list[str]]:
+    """Split the test-redirect box into usable numbers, and unusable leftovers.
+
+    Without this, "714-300-3245, 470-555-0100" is stripped to digits as a single
+    string and becomes one 20-digit number that quietly goes nowhere.
+    """
+    good, bad = [], []
+    for part in re.split(r"[,;/\n]+| {2,}", text or ""):
+        part = part.strip()
+        if not part:
+            continue
+        digits = normalize_phone_number(part)
+        if not 10 <= len(digits) <= 11:
+            bad.append(part)
+        elif digits not in good:          # a repeat is harmless, just ignore it
+            good.append(digits)
+    return good, bad
 
 
 # ---------- cached resources ----------
@@ -78,11 +98,21 @@ with st.sidebar:
              "message and screenshots it but never presses send. LIVE: real texts.",
     )
 
-    redirect_to = st.text_input(
-        "Redirect ALL messages to this number (test)",
+    redirect_raw = st.text_input(
+        "Redirect ALL messages to these numbers (test)",
         value="",
-        help="If set, every message goes ONLY to this number instead of the real recipients.",
+        help="If set, every message goes ONLY to these numbers instead of the real "
+             "recipients. Separate several with commas — give two or more and they "
+             "are texted as one group, so you can test group messages on your own phones.",
     )
+    redirect_to, redirect_bad = parse_redirect(redirect_raw)
+    if redirect_bad:
+        st.error("Not a usable phone number: " + ", ".join(redirect_bad))
+    elif redirect_to:
+        st.warning(
+            f"All messages will go to {', '.join(redirect_to)} — "
+            + ("as ONE group text." if len(redirect_to) > 1 else "1:1.")
+        )
 
     st.divider()
     merge_toggle = st.toggle("Merge same-day sessions into one message", value=True)
@@ -282,13 +312,15 @@ def build_jobs(selected):
     jobs = []
     for m in selected:
         recipients = m.phones
+        group = m.group_mode
         if redirect_to:
-            recipients = [normalize_phone_number(redirect_to)]
+            recipients = list(redirect_to)
+            group = len(redirect_to) > 1
         jobs.append({
             "id": m.key,
             "label": f"{m.kind} · {m.identity}",
             "recipients": recipients,
-            "group_mode": m.group_mode and not redirect_to,
+            "group_mode": group,
             "message": ss[f"draft_{m.key}"],
         })
     return jobs
