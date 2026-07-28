@@ -2,16 +2,28 @@
 setlocal
 cd /d "%~dp0"
 
+REM  setup_daily_task.bat [HH:MM] [YYYY-MM-DD]
+REM    setup_daily_task.bat 14:00              -> 2pm daily, starting today
+REM    setup_daily_task.bat 14:00 2026-07-29   -> 2pm daily, starting that date
 set "TASKNAME=Tutoring Reminder Texter - Daily"
 set "RUNTIME=%~1"
 if "%RUNTIME%"=="" set "RUNTIME=16:00"
+set "STARTDATE=%~2"
+
+if "%STARTDATE%"=="" (
+  set "WHEN=$at = '%RUNTIME%';"
+  set "FROMTEXT=starting today"
+) else (
+  set "WHEN=$at = [datetime]::ParseExact('%STARTDATE% %RUNTIME%','yyyy-MM-dd HH:mm',$null);"
+  set "FROMTEXT=starting %STARTDATE%"
+)
 
 echo ==========================================================
 echo   Daily reminder schedule
 echo ==========================================================
 echo.
 echo   Task  : %TASKNAME%
-echo   Time  : %RUNTIME% every day
+echo   Time  : %RUNTIME% every day, %FROMTEXT%
 echo   Action: open the app showing TOMORROW's [TUT] sessions
 echo.
 echo   Nothing is sent automatically. You still review the list
@@ -27,7 +39,8 @@ REM   ExecutionTimeLimit=none     - the app may stay open all evening
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop';" ^
   "$act = New-ScheduledTaskAction -Execute '%~dp0daily_reminder.bat' -WorkingDirectory '%~dp0';" ^
-  "$trg = New-ScheduledTaskTrigger -Daily -At '%RUNTIME%';" ^
+  "%WHEN%" ^
+  "$trg = New-ScheduledTaskTrigger -Daily -At $at;" ^
   "$prn = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited;" ^
   "$set = New-ScheduledTaskSettingsSet -MultipleInstances Parallel -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable;" ^
   "Register-ScheduledTask -TaskName '%TASKNAME%' -Action $act -Trigger $trg -Principal $prn -Settings $set -Force | Out-Null;" ^
