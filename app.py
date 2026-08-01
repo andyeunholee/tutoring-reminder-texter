@@ -150,6 +150,10 @@ with col3:
     st.write("")
     search_clicked = st.button("🔍 Search calendar", type="primary", use_container_width=True)
 
+if start_day is None:
+    st.warning("Pick a first session date.")
+    st.stop()
+
 days = coverage_days(start_day, int(span))
 if len(days) > 1:
     st.caption("Covering " + "  ·  ".join(f"{d:%a %b %d}" for d in days))
