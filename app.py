@@ -312,6 +312,24 @@ if c3.button("Reset drafts to templates"):
     for m in messages:
         ss[f"draft_{m.key}"] = m.body
 
+# Per-day buttons must live outside the form — Streamlit only allows
+# st.form_submit_button inside one.
+if len(messages_by_day) > 1:
+    for d, day_msgs in messages_by_day:
+        if not day_msgs:
+            continue
+        lbl, b_sel, b_desel = st.columns([3, 1, 1])
+        lbl.markdown(f"**{d:%A, %b %d}** — {len(day_msgs)} message(s)")
+        if b_sel.button("Select all", key=f"selall_{d.isoformat()}",
+                        use_container_width=True):
+            for m in day_msgs:
+                if not m.blocked:
+                    ss[f"send_{m.key}"] = True
+        if b_desel.button("Deselect all", key=f"deselall_{d.isoformat()}",
+                          use_container_width=True):
+            for m in day_msgs:
+                ss[f"send_{m.key}"] = False
+
 with st.form("review"):
     for d, day_msgs in messages_by_day:
         if not day_msgs:
@@ -473,10 +491,13 @@ if ss.results:
     st.divider()
     st.subheader("Results")
     by_key = {m.key: m for m in messages}
+    day_by_key = {m.key: d for d, day_msgs in messages_by_day for m in day_msgs}
     res_rows = []
     for key, r in ss.results.items():
         m = by_key.get(key)
+        d = day_by_key.get(key)
         res_rows.append({
+            "Date": f"{d:%a %b %d}" if d else "",
             "Message": f"{KIND_LABEL.get(m.kind, '?')} · {m.identity}" if m else key,
             "Status": r["status"],
             "Error": r.get("error") or "",
