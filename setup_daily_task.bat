@@ -7,7 +7,7 @@ REM    setup_daily_task.bat 14:00              -> 2pm daily, starting today
 REM    setup_daily_task.bat 14:00 2026-07-29   -> 2pm daily, starting that date
 set "TASKNAME=Tutoring Reminder Texter - Daily"
 set "RUNTIME=%~1"
-if "%RUNTIME%"=="" set "RUNTIME=16:00"
+if "%RUNTIME%"=="" set "RUNTIME=14:00"
 set "STARTDATE=%~2"
 
 if "%STARTDATE%"=="" (

@@ -19,7 +19,7 @@ echo   If the browser does not open, go to:  http://localhost:8501
 echo ==========================================================
 echo.
 
-REM %1 = URL to open (the 4pm task passes one that auto-searches tomorrow).
+REM %1 = URL to open (the 2pm task passes one that auto-searches tomorrow).
 set "APP_URL=%~1"
 if "%APP_URL%"=="" set "APP_URL=http://localhost:8501"
 

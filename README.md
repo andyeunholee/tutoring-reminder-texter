@@ -85,12 +85,12 @@ run_app.bat
    - `LIVE SEND` — 실제 발송
 4. **Send N selected messages** 클릭
 
-## 매일 오후 4시에 자동으로 띄우기
+## 매일 오후 2시에 자동으로 띄우기
 
 ```
 setup_daily_task.bat
 ```
-한 번만 실행하면 Windows 작업 스케줄러에 등록됩니다. 매일 오후 4시에
+한 번만 실행하면 Windows 작업 스케줄러에 등록됩니다. 매일 오후 2시에
 **다음날 [TUT] 일정을 이미 검색한 상태로** 앱이 열립니다.
 
 - **문자가 자동으로 나가지는 않습니다.** 검토하고 직접 보내기 버튼을 누르셔야 합니다.
@@ -98,7 +98,7 @@ setup_daily_task.bat
 - 지금 바로 실행: `schtasks /run /tn "Tutoring Reminder Texter - Daily"`
 - 없애기: `schtasks /delete /tn "Tutoring Reminder Texter - Daily" /f`
 
-컴퓨터가 켜져 있고 로그인된 상태여야 실행됩니다. 4시에 자고 있었다면
+컴퓨터가 켜져 있고 로그인된 상태여야 실행됩니다. 2시에 자고 있었다면
 깨운 직후에 실행됩니다.
 
 특정 날짜로 열고 싶으면 주소창에 직접 넣으셔도 됩니다:

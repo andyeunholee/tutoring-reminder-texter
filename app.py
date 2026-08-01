@@ -149,7 +149,7 @@ with col2:
     st.write("")
     search_clicked = st.button("🔍 Search calendar", type="primary", use_container_width=True)
 
-# ?auto=1 (used by the 4pm scheduled task) searches straight away, so the page
+# ?auto=1 (used by the 2pm scheduled task) searches straight away, so the page
 # is already showing tomorrow's messages when it appears on screen.
 auto_search = (str(st.query_params.get("auto", "")).lower() in ("1", "true", "yes")
                and not ss.autosearch_done)
