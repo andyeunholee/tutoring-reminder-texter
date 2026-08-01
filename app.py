@@ -317,8 +317,10 @@ if c3.button("Reset drafts to templates"):
         ss[f"draft_{m.key}"] = m.body
 
 # Per-day buttons must live outside the form — Streamlit only allows
-# st.form_submit_button inside one.
-if len(messages_by_day) > 1:
+# st.form_submit_button inside one. Count the days that actually have
+# messages: with sessions on one day only, a per-day row would just repeat
+# the global buttons directly above it.
+if sum(1 for _, day_msgs in messages_by_day if day_msgs) > 1:
     for d, day_msgs in messages_by_day:
         if not day_msgs:
             continue
