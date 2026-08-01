@@ -10,13 +10,14 @@ import re
 import subprocess
 import sys
 import tempfile
-from datetime import date, timedelta
+from datetime import date
 
 import streamlit as st
 
 import config
 from src.auth import get_credentials
 from src.calendar_service import TutoringCalendarService
+from src.coverage_window import coverage_days, resolve_window
 from src.message_builder import build_messages
 from src.roster import RosterUnavailable, load_roster
 from sms.gv_sender import normalize_phone_number
@@ -68,12 +69,12 @@ def cached_roster(spreadsheet_id: str):
 # ---------- session state ----------
 
 ss = st.session_state
-ss.setdefault("events", None)
-ss.setdefault("total_scanned", 0)
+# day_results: list of {"day": date, "events": [...], "total_scanned": int}
+# None means "no search has been run yet".
+ss.setdefault("day_results", None)
 ss.setdefault("messages", [])
 ss.setdefault("results", {})       # key -> {"status": ..., "error": ...}
 ss.setdefault("run_log", [])
-ss.setdefault("searched_day", None)
 ss.setdefault("autosearch_done", False)
 
 
@@ -130,27 +131,31 @@ with st.sidebar:
 
 st.title("📅 Tutoring Reminder Texter")
 
-def requested_day() -> date:
-    """Which date to show first. ?date=YYYY-MM-DD wins, else tomorrow."""
-    raw = st.query_params.get("date")
-    if raw:
-        try:
-            return date.fromisoformat(raw)
-        except ValueError:
-            pass
-    return date.today() + timedelta(days=1)
+first_day, default_days = resolve_window(
+    st.query_params.get("date"),
+    st.query_params.get("days"),
+    date.today(),
+)
 
-
-col1, col2 = st.columns([2, 1])
+col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
-    day = st.date_input("Session date", value=requested_day())
+    start_day = st.date_input("First session date", value=first_day)
 with col2:
+    span = st.number_input("Days to cover", min_value=1, max_value=7,
+                           value=default_days, step=1,
+                           help="A Saturday run defaults to 3 so Sunday, Monday "
+                                "and Tuesday can be prepared in one sitting.")
+with col3:
     st.write("")
     st.write("")
     search_clicked = st.button("🔍 Search calendar", type="primary", use_container_width=True)
 
+days = coverage_days(start_day, int(span))
+if len(days) > 1:
+    st.caption("Covering " + "  ·  ".join(f"{d:%a %b %d}" for d in days))
+
 # ?auto=1 (used by the 2pm scheduled task) searches straight away, so the page
-# is already showing tomorrow's messages when it appears on screen.
+# is already showing the upcoming messages when it appears on screen.
 auto_search = (str(st.query_params.get("auto", "")).lower() in ("1", "true", "yes")
                and not ss.autosearch_done)
 if auto_search:
@@ -165,22 +170,24 @@ if do_search:
         st.stop()
     try:
         svc = TutoringCalendarService(google_creds(), config.CALENDAR_ID, config.LOCAL_TZ)
-        events, total = svc.list_tut_events_on(day)
+        # One fetch per day. Three calls a week costs nothing and keeps the
+        # per-day grouping that the messages and the review list need.
+        fetched = []
+        for d in days:
+            events, total = svc.list_tut_events_on(d)
+            fetched.append({"day": d, "events": events, "total_scanned": total})
     except Exception as e:
+        # Deliberately all-or-nothing: a partial result would make "no sessions
+        # on Sunday" indistinguishable from "Sunday's fetch failed".
         st.error(f"Calendar fetch failed: {e}")
         st.stop()
-    ss.events = events
-    ss.total_scanned = total
-    ss.searched_day = day
+    ss.day_results = fetched
     ss.results = {}
     ss.run_log = []
 
-if ss.events is None:
+if ss.day_results is None:
     st.info("Pick a date and click **Search calendar**.")
     st.stop()
-
-events = ss.events
-day = ss.searched_day
 
 # rebuild messages every run so sidebar toggles apply (drafts survive via setdefault)
 try:
@@ -198,17 +205,23 @@ except Exception as e:
 if roster.load_errors:
     st.warning("Roster issues: " + "; ".join(roster.load_errors))
 
-messages = build_messages(
-    events,
-    roster,
-    merge_sessions_per_recipient=merge_toggle,
-    include_cancelled=include_cancelled,
-    org_name=config.ORG_NAME,
-)
-if not send_teachers:
-    messages = [m for m in messages if m.kind != "teacher"]
-if not send_students:
-    messages = [m for m in messages if m.kind != "student_group"]
+messages_by_day: list[tuple[date, list]] = []
+for r in ss.day_results:
+    day_msgs = build_messages(
+        r["events"],
+        roster,
+        merge_sessions_per_recipient=merge_toggle,
+        include_cancelled=include_cancelled,
+        org_name=config.ORG_NAME,
+        day_tag=r["day"].isoformat(),
+    )
+    if not send_teachers:
+        day_msgs = [m for m in day_msgs if m.kind != "teacher"]
+    if not send_students:
+        day_msgs = [m for m in day_msgs if m.kind != "student_group"]
+    messages_by_day.append((r["day"], day_msgs))
+
+messages = [m for _, day_msgs in messages_by_day for m in day_msgs]
 ss.messages = messages
 
 # draft/checkbox state: setdefault so edits survive reruns; prune stale keys
@@ -223,41 +236,48 @@ for k in list(ss.keys()):
 
 # ---------- screen 2: events summary ----------
 
-active_events = [e for e in events if not e.is_cancelled]
-cancelled_events = [e for e in events if e.is_cancelled]
+for r in ss.day_results:
+    d, day_events = r["day"], r["events"]
+    active_events = [e for e in day_events if not e.is_cancelled]
+    cancelled_events = [e for e in day_events if e.is_cancelled]
 
-st.subheader(f"{day:%A}, {day:%B} {day.day} — {len(active_events)} tutoring session(s)")
-st.caption(f"{ss.total_scanned} calendar events scanned, {len(events)} with [TUT].")
+    st.subheader(f"{d:%A}, {d:%B} {d.day} — {len(active_events)} tutoring session(s)")
+    st.caption(f"{r['total_scanned']} calendar events scanned, {len(day_events)} with [TUT].")
 
-if not events:
-    st.info(f"No [TUT] events found on {day}.")
+    if not day_events:
+        st.info(f"No [TUT] events found on {d}.")
+        continue
+
+    rows = []
+    for e in active_events:
+        rows.append({
+            "Time": f"{e.start:%I:%M %p} - {e.end:%I:%M %p}",
+            "Type": e.parsed.session_type,
+            "Teacher": e.teacher_name,
+            "Student(s)": ", ".join(e.student_names),
+            "Subject": e.subject,
+        })
+    if rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    if cancelled_events and not include_cancelled:
+        with st.expander(f"🚫 {len(cancelled_events)} cancelled event(s) skipped — {d:%b %d}"):
+            for e in cancelled_events:
+                st.text(f"{e.start:%I:%M %p}  [{e.parsed.cancel_marker}]  {e.raw_summary}")
+
+    with st.expander(f"Raw titles (parser audit) — {d:%b %d}"):
+        for e in day_events:
+            st.text(e.raw_summary)
+            st.caption(
+                f"→ teacher: {e.teacher_name!r} | students: {e.student_names!r} | "
+                f"subject: {e.subject!r} | type: {e.parsed.session_type!r} | "
+                f"cancelled: {e.is_cancelled} | warnings: {e.parsed.warnings}"
+            )
+
+# Only give up when every covered day is empty — one empty Sunday must not
+# hide Monday and Tuesday.
+if not any(r["events"] for r in ss.day_results):
     st.stop()
-
-rows = []
-for e in active_events:
-    rows.append({
-        "Time": f"{e.start:%I:%M %p} - {e.end:%I:%M %p}",
-        "Type": e.parsed.session_type,
-        "Teacher": e.teacher_name,
-        "Student(s)": ", ".join(e.student_names),
-        "Subject": e.subject,
-    })
-if rows:
-    st.dataframe(rows, use_container_width=True, hide_index=True)
-
-if cancelled_events and not include_cancelled:
-    with st.expander(f"🚫 {len(cancelled_events)} cancelled event(s) skipped"):
-        for e in cancelled_events:
-            st.text(f"{e.start:%I:%M %p}  [{e.parsed.cancel_marker}]  {e.raw_summary}")
-
-with st.expander("Raw titles (parser audit)"):
-    for e in events:
-        st.text(e.raw_summary)
-        st.caption(
-            f"→ teacher: {e.teacher_name!r} | students: {e.student_names!r} | "
-            f"subject: {e.subject!r} | type: {e.parsed.session_type!r} | "
-            f"cancelled: {e.is_cancelled} | warnings: {e.parsed.warnings}"
-        )
 
 
 # ---------- screen 3: review list ----------
@@ -275,7 +295,7 @@ if redirect_to:
     st.warning(f"⚠️ TEST MODE: every message will be redirected to {redirect_to}")
 
 if not messages:
-    st.info("Nothing to send for this day with the current toggles.")
+    st.info("Nothing to send for these dates with the current toggles.")
     st.stop()
 
 KIND_LABEL = {"teacher": "👨‍🏫 TEACHER", "student_group": "👨‍👩‍👧 STUDENT+PARENT"}
@@ -293,31 +313,35 @@ if c3.button("Reset drafts to templates"):
         ss[f"draft_{m.key}"] = m.body
 
 with st.form("review"):
-    for m in messages:
-        with st.container(border=True):
-            head_l, head_r = st.columns([5, 2])
-            with head_l:
-                sessions = f"{len(m.events)} session(s)"
-                st.checkbox(
-                    f"**{KIND_LABEL.get(m.kind, m.kind)} · {m.identity}** · {sessions}",
-                    key=f"send_{m.key}",
-                    disabled=m.blocked,
-                )
-            with head_r:
-                for b in m.badges:
-                    st.caption(f"🔶 {b}")
-                if m.is_cancelled:
-                    st.caption("🚫 CANCELLED event")
-            if m.recipients:
-                st.caption("To: " + " · ".join(f"{r.label} {r.phone}" for r in m.recipients)
-                           + ("  → 그룹 문자" if m.group_mode else "  → 1:1"))
-            for reason in m.block_reasons:
-                st.markdown(f":red[⚠️ {reason}]")
-            st.text_area("Message", key=f"draft_{m.key}", height=170,
-                         label_visibility="collapsed", disabled=m.blocked)
-            with st.expander("Source events"):
-                for e in m.events:
-                    st.text(f"{e.start:%I:%M %p}  {e.raw_summary}")
+    for d, day_msgs in messages_by_day:
+        if not day_msgs:
+            continue
+        st.markdown(f"### {d:%A}, {d:%B} {d.day}")
+        for m in day_msgs:
+            with st.container(border=True):
+                head_l, head_r = st.columns([5, 2])
+                with head_l:
+                    sessions = f"{len(m.events)} session(s)"
+                    st.checkbox(
+                        f"**{KIND_LABEL.get(m.kind, m.kind)} · {m.identity}** · {sessions}",
+                        key=f"send_{m.key}",
+                        disabled=m.blocked,
+                    )
+                with head_r:
+                    for b in m.badges:
+                        st.caption(f"🔶 {b}")
+                    if m.is_cancelled:
+                        st.caption("🚫 CANCELLED event")
+                if m.recipients:
+                    st.caption("To: " + " · ".join(f"{r.label} {r.phone}" for r in m.recipients)
+                               + ("  → 그룹 문자" if m.group_mode else "  → 1:1"))
+                for reason in m.block_reasons:
+                    st.markdown(f":red[⚠️ {reason}]")
+                st.text_area("Message", key=f"draft_{m.key}", height=170,
+                             label_visibility="collapsed", disabled=m.blocked)
+                with st.expander("Source events"):
+                    for e in m.events:
+                        st.text(f"{e.start:%I:%M %p}  {e.raw_summary}")
 
     n_selected = sum(
         1 for m in messages if not m.blocked and ss.get(f"send_{m.key}", False))
