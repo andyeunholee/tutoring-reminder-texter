@@ -36,8 +36,12 @@ class OutboundMessage:
         return [r.phone for r in self.recipients if r.phone]
 
 
-def message_key(kind: str, identity: str, phones: list[str]) -> str:
+def message_key(kind: str, identity: str, phones: list[str], day_tag: str = "") -> str:
     basis = f"{kind}|{identity.casefold()}|{','.join(sorted(phones))}"
+    if day_tag:
+        # Without the date, the same teacher on two covered days collides and
+        # the two messages share one draft box and one result row in app.py.
+        basis = f"{day_tag}|{basis}"
     return hashlib.md5(basis.encode("utf-8")).hexdigest()[:10]
 
 
@@ -147,17 +151,20 @@ def build_messages(
     merge_sessions_per_recipient: bool = True,
     include_cancelled: bool = False,
     org_name: str = "Elite Prep",
+    day_tag: str = "",
 ) -> list[OutboundMessage]:
     active = [e for e in events if include_cancelled or not e.is_cancelled]
     active.sort(key=lambda e: e.start)
 
     messages: list[OutboundMessage] = []
-    messages.extend(_build_teacher_messages(active, roster, merge_sessions_per_recipient, org_name))
-    messages.extend(_build_student_messages(active, roster, merge_sessions_per_recipient, org_name))
+    messages.extend(
+        _build_teacher_messages(active, roster, merge_sessions_per_recipient, org_name, day_tag))
+    messages.extend(
+        _build_student_messages(active, roster, merge_sessions_per_recipient, org_name, day_tag))
     return messages
 
 
-def _build_teacher_messages(events, roster, merge, org_name) -> list[OutboundMessage]:
+def _build_teacher_messages(events, roster, merge, org_name, day_tag="") -> list[OutboundMessage]:
     groups: dict[str, dict] = {}
     for ev in events:
         raw_name = ev.teacher_name
@@ -202,7 +209,7 @@ def _build_teacher_messages(events, roster, merge, org_name) -> list[OutboundMes
         body = render_teacher_body(display, evs, org_name)
         phones = [r.phone for r in recipients]
         out.append(OutboundMessage(
-            key=message_key("teacher", match.norm_key or raw_name, phones),
+            key=message_key("teacher", match.norm_key or raw_name, phones, day_tag),
             kind="teacher",
             identity=display,
             recipients=recipients,
@@ -217,7 +224,7 @@ def _build_teacher_messages(events, roster, merge, org_name) -> list[OutboundMes
     return out
 
 
-def _build_student_messages(events, roster, merge, org_name) -> list[OutboundMessage]:
+def _build_student_messages(events, roster, merge, org_name, day_tag="") -> list[OutboundMessage]:
     # One group message per event containing ALL that event's students + parents
     # (user's explicit choice). Events whose recipient phone set is identical
     # merge into one message when merge=True.
@@ -300,7 +307,7 @@ def _build_student_messages(events, roster, merge, org_name) -> list[OutboundMes
         if len(evs) > 1:
             badges.append(f"{len(evs)} sessions merged into one message")
         out.append(OutboundMessage(
-            key=message_key("student_group", g["identity_norm"], phones),
+            key=message_key("student_group", g["identity_norm"], phones, day_tag),
             kind="student_group",
             identity=g["display"],
             recipients=recipients,

@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from src.message_builder import build_messages
+from src.message_builder import build_messages, message_key
 from src.roster import build_roster
 from src.tut_parser import TutEvent, parse_tut_title
 
@@ -124,3 +124,60 @@ def test_same_student_two_sessions_merged_one_group():
     groups = [m for m in msgs if m.kind == "student_group"]
     assert len(groups) == 1
     assert "2 sessions" in groups[0].body
+
+
+def make_event_on(day, summary, hour, eid="e1"):
+    """Same as make_event but on an explicit date, for multi-day tests."""
+    return TutEvent(
+        event_id=eid,
+        recurring_event_id=None,
+        raw_summary=summary,
+        start=datetime(day.year, day.month, day.day, hour, 0, tzinfo=TZ),
+        end=datetime(day.year, day.month, day.day, hour + 2, 0, tzinfo=TZ),
+        html_link="",
+        meet_link=None,
+        parsed=parse_tut_title(summary),
+    )
+
+
+JOSEPH_ANDREW = ("[TUT] Type: In-Person, Teacher Name: Joseph teacher, "
+                 "Student Name: Kyuheon (Andrew) Ahn, Subject: English")
+
+
+def test_empty_day_tag_keeps_the_existing_keys():
+    # app.py indexes widgets by these digests; changing them silently would
+    # orphan every in-flight draft.
+    assert message_key("teacher", "joseph", ["404-555-0102"]) == "49ed62fa90"
+    assert message_key("teacher", "joseph", ["404-555-0102"], "") == "49ed62fa90"
+    assert message_key(
+        "student_group", "andrew", ["404-555-0202", "404-555-0203"]
+    ) == "42dac460e9"
+
+
+def test_day_tag_changes_the_key():
+    a = message_key("teacher", "joseph", ["404-555-0102"], "2026-08-02")
+    b = message_key("teacher", "joseph", ["404-555-0102"], "2026-08-03")
+    assert a != b
+    assert a != message_key("teacher", "joseph", ["404-555-0102"])
+
+
+def test_same_person_on_two_days_gets_two_independent_messages():
+    sun = build_messages([make_event_on(date(2026, 8, 2), JOSEPH_ANDREW, 13, "e1")],
+                         roster(), day_tag="2026-08-02")
+    mon = build_messages([make_event_on(date(2026, 8, 3), JOSEPH_ANDREW, 13, "e2")],
+                         roster(), day_tag="2026-08-03")
+    assert {m.key for m in sun}.isdisjoint({m.key for m in mon})
+
+
+def test_per_day_building_keeps_each_date_line_correct():
+    sun = build_messages([make_event_on(date(2026, 8, 2), JOSEPH_ANDREW, 13, "e1")],
+                         roster(), day_tag="2026-08-02")
+    mon = build_messages([make_event_on(date(2026, 8, 3), JOSEPH_ANDREW, 15, "e2")],
+                         roster(), day_tag="2026-08-03")
+    t_sun = next(m for m in sun if m.kind == "teacher")
+    t_mon = next(m for m in mon if m.kind == "teacher")
+    assert "Sunday, August 2" in t_sun.body
+    assert "Monday, August 3" in t_mon.body
+    # neither message mentions the other day
+    assert "August 3" not in t_sun.body
+    assert "August 2" not in t_mon.body
