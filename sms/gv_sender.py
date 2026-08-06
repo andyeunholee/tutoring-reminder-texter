@@ -166,11 +166,66 @@ def _read_box(page, sel) -> str:
             return ""
 
 
+def _element_has_focus(page, sel) -> bool:
+    """True when `sel` is the element that will receive the next keystroke."""
+    try:
+        handle = page.locator(sel).first.element_handle()
+        return bool(page.evaluate("(el) => el === document.activeElement", handle))
+    except Exception:
+        return False
+
+
+def _focus_message_box(page, sel, log) -> bool:
+    """Put focus in the message box and prove it took. False if it never did.
+
+    Clicking is not enough on the compose screen. Two contact-autocomplete
+    inputs float over the conversation there — the compose "Add recipients"
+    box and the dialpad's "Enter a name or number" box — and either can swallow
+    the click or pull focus straight back. Keystrokes then land in a contact
+    search while the message box stays empty, which is how a whole reminder
+    once ended up typed into a contact lookup instead of being sent.
+    """
+    for attempt in range(3):
+        if attempt == 2:
+            # Last resort: close whatever dropdown is holding on to focus.
+            try:
+                page.keyboard.press("Escape")
+                time.sleep(0.3)
+            except Exception:
+                pass
+        try:
+            page.click(sel, timeout=5000)
+        except Exception as e:
+            log(f"Message box click failed (attempt {attempt + 1}): {e}")
+        time.sleep(0.3)
+        if _element_has_focus(page, sel):
+            return True
+        # A click goes to whatever covers the coordinates; a direct DOM focus()
+        # cannot be intercepted that way.
+        try:
+            page.focus(sel)
+        except Exception:
+            pass
+        try:
+            page.evaluate("(el) => el.focus()",
+                          page.locator(sel).first.element_handle())
+        except Exception:
+            pass
+        time.sleep(0.3)
+        if _element_has_focus(page, sel):
+            return True
+        log(f"Focus did not land in the message box (attempt {attempt + 1})")
+    return False
+
+
 def _type_multiline(page, sel, text, log):
     """Type into the box using Shift+Enter for line breaks (Enter would send)."""
-    page.click(sel)
-    time.sleep(0.3)
-    page.focus(sel)
+    if not _focus_message_box(page, sel, log):
+        # Bail before a single keystroke: typing here would go into a contact
+        # search field, and the Control+A below would clear whatever it owns.
+        raise RuntimeError(
+            "could not put focus in the message box — a contact autocomplete is "
+            "probably covering it; nothing was typed")
     page.keyboard.press("Control+A")
     page.keyboard.press("Backspace")
     time.sleep(0.2)
