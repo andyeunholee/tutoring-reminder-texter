@@ -28,7 +28,13 @@ def split_phones(raw) -> list[str]:
     "(678) 780-5797, (404) 123-4567" and leave one 20-digit string that reaches
     nobody at all.
     """
-    return [p for p in (x.strip() for x in _PHONE_SPLIT_RE.split(str(raw or ""))) if p]
+    # Numbers copied out of Google Voice carry invisible bidi marks (U+202A/
+    # U+202C). They reach nobody's eye but they do reach the recipient dedupe,
+    # which compares raw strings — so the same number pasted with and without
+    # them would text one parent twice.
+    cleaned = "".join(ch for ch in str(raw or "")
+                      if unicodedata.category(ch) != "Cf")
+    return [p for p in (x.strip() for x in _PHONE_SPLIT_RE.split(cleaned)) if p]
 
 
 def norm_key(name: str, *, is_teacher: bool = False) -> str:

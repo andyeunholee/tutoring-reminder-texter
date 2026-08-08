@@ -65,6 +65,16 @@ def test_three_numbers():
     assert len(split_phones("111-111-1111, 222-222-2222, 333-333-3333")) == 3
 
 
+def test_invisible_bidi_marks_from_pasted_numbers_are_dropped():
+    # Google Voice wraps numbers in U+202A/U+202C, and copying one carries them
+    # along. They survive into the cell invisibly, and the recipient dedupe in
+    # message_builder compares raw strings — so a number pasted twice, once with
+    # the marks and once without, would text the same person twice.
+    assert split_phones("‪(678) 780-5797‬") == ["(678) 780-5797"]
+    assert split_phones("(678) 780-5797, (678) 788-0678‬") == [
+        "(678) 780-5797", "(678) 788-0678"]
+
+
 def test_blank_and_messy_cells():
     assert split_phones("") == []
     assert split_phones(None) == []
