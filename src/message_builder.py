@@ -246,10 +246,11 @@ def _build_student_messages(events, roster, merge, org_name, day_tag="") -> list
                     badges.append(f'fuzzy match: "{raw_name}" -> "{row.calendar_name}"')
                 if row.student_phone:
                     recipients.append(Recipient(f"{row.display_name} (student)", row.student_phone))
-                if row.parent_phone:
+                if row.parent_phones:
                     plabel = row.parent_name or f"{row.display_name}'s parent"
-                    recipients.append(Recipient(f"{plabel} (parent)", row.parent_phone))
-                if not row.student_phone and not row.parent_phone:
+                    for parent_phone in row.parent_phones:
+                        recipients.append(Recipient(f"{plabel} (parent)", parent_phone))
+                if not row.student_phone and not row.parent_phones:
                     reasons.append(
                         f'Student "{row.calendar_name}" has no student or parent phone in the Students tab.'
                     )

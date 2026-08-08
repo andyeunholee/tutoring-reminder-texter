@@ -14,6 +14,21 @@ from googleapiclient.errors import HttpError
 from src.tut_parser import MARKER_RE, PARENS_RE, TEACHER_SUFFIX_RE
 
 _NON_WORD_RE = re.compile(r"[^\w\s]", re.UNICODE)
+# Separators between two numbers sharing one cell. A single space is NOT one of
+# them: it lives inside "(678) 780-5797".
+_PHONE_SPLIT_RE = re.compile(r"[,;/\n]+| {2,}")
+
+
+def split_phones(raw) -> list[str]:
+    """The numbers held in one sheet cell.
+
+    Families often want both parents on the reminder, and the sheet keeps a
+    single Parent Phone column. Splitting has to happen here: handing the raw
+    cell to normalize_phone_number would strip the punctuation out of
+    "(678) 780-5797, (404) 123-4567" and leave one 20-digit string that reaches
+    nobody at all.
+    """
+    return [p for p in (x.strip() for x in _PHONE_SPLIT_RE.split(str(raw or ""))) if p]
 
 
 def norm_key(name: str, *, is_teacher: bool = False) -> str:
@@ -41,7 +56,7 @@ class StudentRow:
     display_name: str
     student_phone: str
     parent_name: str
-    parent_phone: str
+    parent_phones: tuple[str, ...]   # one cell can list several
     active: bool
     notes: str = ""
 
@@ -167,7 +182,7 @@ def build_roster(teacher_rows: list[list], student_rows: list[list],
             display_name=_get(row, 1) or PARENS_RE.sub("", name).strip(),
             student_phone=_get(row, 2),
             parent_name=_get(row, 3),
-            parent_phone=_get(row, 4),
+            parent_phones=tuple(split_phones(_get(row, 4))),
             active=_truthy(_get(row, 5) or "true"),
             notes=_get(row, 6),
         )
