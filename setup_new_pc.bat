@@ -63,6 +63,8 @@ if exist ".env" (
   )
 )
 
+call "%~dp0register_web_button.bat" /quiet
+
 echo.
 echo ==========================================================
 echo   Remaining steps you must do by hand

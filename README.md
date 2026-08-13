@@ -85,6 +85,29 @@ run_app.bat
    - `LIVE SEND` — 실제 발송
 4. **Send N selected messages** 클릭
 
+## 내 웹사이트의 버튼으로 실행하기
+
+앱이 설치된 컴퓨터라면, 바탕화면 아이콘 대신 **내 웹사이트에 만든 버튼**으로도
+앱을 켤 수 있습니다.
+
+1. 이 컴퓨터에서 한 번만: `register_web_button.bat` 실행
+   (`setup_new_pc.bat`으로 설치했다면 이미 등록되어 있습니다.)
+2. 웹사이트 버튼의 링크 주소를 `tutoring-texter://open` 으로:
+   ```html
+   <a href="tutoring-texter://open"
+      style="display:inline-block; padding:10px 20px; background:#1a73e8;
+             color:#fff; border-radius:6px; text-decoration:none;">
+     📱 Tutoring Reminder Texter 실행
+   </a>
+   ```
+3. 브라우저마다 처음 한 번은 "앱을 열까요?" 확인창이 뜹니다.
+   **"항상 허용"에 체크**하면 다음부터는 진짜 클릭 한 번입니다.
+
+- 폴더를 옮겼다면 `register_web_button.bat`을 다시 실행하세요 (등록된 경로가 바뀝니다).
+- 앱이 이미 켜져 있을 때 버튼을 누르면 새로 켜지 않고 기존 화면만 다시 엽니다.
+- **등록 안 된 컴퓨터(남의 PC, 폰)에서는 버튼이 아무것도 하지 않습니다.**
+  그런 기기에서 쓰려면 Chrome Remote Desktop 등으로 이 컴퓨터에 원격 접속하세요.
+
 ## 매일 오후 2시에 자동으로 띄우기
 
 ```
