@@ -18,6 +18,10 @@ _NON_WORD_RE = re.compile(r"[^\w\s]", re.UNICODE)
 # them: it lives inside "(678) 780-5797".
 _PHONE_SPLIT_RE = re.compile(r"[,;/\n]+| {2,}")
 
+# Students-tab Time Zone values the app understands. Blank and EST mean
+# "leave times alone"; the rest shift the displayed clock in message_builder.
+_KNOWN_TIMEZONES = ("", "EST", "CST", "MST", "PST")
+
 
 def split_phones(raw) -> list[str]:
     """The numbers held in one sheet cell.
@@ -54,6 +58,7 @@ class TeacherRow:
     phone: str
     active: bool
     notes: str = ""
+    full_name: str = ""   # exact text for student texts, e.g. "Mr. Joseph O'Hailey"
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,7 @@ class StudentRow:
     parent_phones: tuple[str, ...]   # one cell can list several
     active: bool
     notes: str = ""
+    timezone: str = ""               # "", "EST", "CST", "MST", "PST"
 
 
 @dataclass(frozen=True)
@@ -173,6 +179,7 @@ def build_roster(teacher_rows: list[list], student_rows: list[list],
             phone=_get(row, 2),
             active=_truthy(_get(row, 3) or "true"),
             notes=_get(row, 4),
+            full_name=_get(row, 5),
         )
         key = norm_key(name, is_teacher=True)
         if key in roster.teachers:
@@ -183,6 +190,16 @@ def build_roster(teacher_rows: list[list], student_rows: list[list],
         name = _get(row, 0)
         if not name:
             continue
+        raw_tz = _get(row, 7)
+        tz = raw_tz.strip().upper()
+        if tz not in _KNOWN_TIMEZONES:
+            # Never fall back silently: a typo here would put a wrong clock
+            # time in front of a parent.
+            roster.load_errors.append(
+                f'Student "{name}" has an unrecognized Time Zone "{raw_tz}" '
+                "(use CST, MST, or PST; blank = EST). Times left in EST."
+            )
+            tz = ""
         s = StudentRow(
             calendar_name=name,
             display_name=_get(row, 1) or PARENS_RE.sub("", name).strip(),
@@ -191,6 +208,7 @@ def build_roster(teacher_rows: list[list], student_rows: list[list],
             parent_phones=tuple(split_phones(_get(row, 4))),
             active=_truthy(_get(row, 5) or "true"),
             notes=_get(row, 6),
+            timezone=tz,
         )
         key = norm_key(name)
         if key in roster.students:

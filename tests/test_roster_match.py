@@ -82,3 +82,28 @@ def test_display_name_fallback_strips_parens():
     r = make_roster()
     m = r.match_student("Jian Choi")
     assert m.row.display_name == "Jian Choi"
+
+
+def test_student_timezone_column():
+    rows = [["Zena Kim", "Zena", "404-555-0208", "", "404-555-0209", "TRUE", "", "cst"]]
+    r = build_roster(TEACHERS, rows, [])
+    assert r.match_student("Zena Kim").row.timezone == "CST"
+    assert r.load_errors == []
+
+
+def test_student_timezone_missing_column_is_est():
+    r = make_roster()
+    assert r.match_student("Jian Choi").row.timezone == ""
+
+
+def test_student_timezone_typo_is_flagged_not_silent():
+    rows = [["Zena Kim", "Zena", "404-555-0208", "", "404-555-0209", "TRUE", "", "CTS"]]
+    r = build_roster(TEACHERS, rows, [])
+    assert r.match_student("Zena Kim").row.timezone == ""
+    assert any("CTS" in e and "Zena Kim" in e for e in r.load_errors)
+
+
+def test_teacher_full_name_column():
+    rows = [["Joseph", "Joseph", "404-555-0102", "TRUE", "", "Mr. Joseph O'Hailey"]]
+    r = build_roster(rows, STUDENTS, [])
+    assert r.match_teacher("Joseph teacher").row.full_name == "Mr. Joseph O'Hailey"
