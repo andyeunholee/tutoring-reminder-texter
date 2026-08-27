@@ -27,9 +27,10 @@ BOOTSTRAP_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 
-TEACHER_HEADERS = ["Teacher Name (as in calendar)", "Display Name", "Phone", "Active", "Notes"]
+TEACHER_HEADERS = ["Teacher Name (as in calendar)", "Display Name", "Phone", "Active", "Notes",
+                   "Full Name (in student texts)"]
 STUDENT_HEADERS = ["Student Name (as in calendar)", "Display Name", "Student Phone",
-                   "Parent Name", "Parent Phone", "Active", "Notes"]
+                   "Parent Name", "Parent Phone", "Active", "Notes", "Time Zone"]
 ALIAS_HEADERS = ["Name As Written In Calendar", "Type (teacher/student)",
                  "Canonical Name (must match col A of Teachers/Students)"]
 
@@ -84,9 +85,9 @@ def create_sheet(sheets, teachers, students):
         spreadsheetId=ssid,
         body={"valueInputOption": "RAW", "data": [
             {"range": "Teachers!A1",
-             "values": [TEACHER_HEADERS] + [[t, t, "", "TRUE", ""] for t in teachers]},
+             "values": [TEACHER_HEADERS] + [[t, t, "", "TRUE", "", ""] for t in teachers]},
             {"range": "Students!A1",
-             "values": [STUDENT_HEADERS] + [[s, "", "", "", "", "TRUE", ""] for s in students]},
+             "values": [STUDENT_HEADERS] + [[s, "", "", "", "", "TRUE", "", ""] for s in students]},
             {"range": "Aliases!A1", "values": [ALIAS_HEADERS]},
         ]},
     ).execute()
