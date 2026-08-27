@@ -1,4 +1,4 @@
-# Per-student timezone display in reminder texts
+# Per-student timezone display + teacher full names in reminder texts
 
 Date: 2026-08-27
 Status: approved by owner
@@ -48,6 +48,22 @@ the student data lives), hardcoding Zena (breaks on the next remote student).
 - `README.md` — one bullet in the roster-sheet section.
 - Tests: row parsing incl. bad value warning, shift math, student single and
   multi bodies, sibling group, teacher body unchanged.
+
+## Companion feature: teacher full names in student texts
+
+Owner request (same session): student/parent texts should say
+`Teacher: Mr. Joseph O'Hailey`, not `Teacher: Joseph`.
+
+- A trailing **"Full Name" column on the Teachers tab** holds the exact text to
+  print (honorific included). Blank = today's behavior (calendar name).
+- Used ONLY in student-group bodies: the `Teacher:` line and the
+  `with {teacher}` part of multi-session lines. The teacher's own text keeps
+  greeting them by Display Name ("Hi Joseph").
+- `src/roster.py`: `TeacherRow.full_name` from column index 5.
+- `src/message_builder.py`: `_build_student_messages` resolves each event's
+  `ev.teacher_name` through `roster.match_teacher` into a labels dict passed to
+  `render_student_body`; unmatched or blank falls back to `ev.teacher_name`.
+- `scripts/create_roster_sheet.py`: add the header for new sheets.
 
 ## Out of scope
 
