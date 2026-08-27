@@ -58,7 +58,7 @@ class TeacherRow:
     phone: str
     active: bool
     notes: str = ""
-    full_name: str = ""   # exact text for student texts, e.g. "Mr. Joseph O'Hailey"
+    full_name: str = ""   # exact text for student texts, e.g. "Mr. Joseph"
 
 
 @dataclass(frozen=True)

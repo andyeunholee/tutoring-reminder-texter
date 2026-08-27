@@ -28,7 +28,7 @@ BOOTSTRAP_SCOPES = [
 ]
 
 TEACHER_HEADERS = ["Teacher Name (as in calendar)", "Display Name", "Phone", "Active", "Notes",
-                   "Full Name (in student texts)"]
+                   "Name in Student Texts"]
 STUDENT_HEADERS = ["Student Name (as in calendar)", "Display Name", "Student Phone",
                    "Parent Name", "Parent Phone", "Active", "Notes", "Time Zone"]
 ALIAS_HEADERS = ["Name As Written In Calendar", "Type (teacher/student)",
