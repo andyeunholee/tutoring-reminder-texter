@@ -59,8 +59,8 @@ LOCAL_TZ = ZoneInfo("America/New_York")
 
 # --- Roster Google Sheet ---
 ROSTER_SPREADSHEET_ID = os.getenv("ROSTER_SPREADSHEET_ID", "")
-ROSTER_TEACHERS_RANGE = "Teachers!A2:E"
-ROSTER_STUDENTS_RANGE = "Students!A2:G"
+ROSTER_TEACHERS_RANGE = "Teachers!A2:F"   # F = Name in Student Texts
+ROSTER_STUDENTS_RANGE = "Students!A2:H"   # H = Time Zone
 ROSTER_ALIASES_RANGE = "Aliases!A2:C"
 
 # --- Google Voice sender ---
