@@ -36,6 +36,79 @@ def roster():
     return build_roster(TEACHERS, STUDENTS, [["MinYeong", "student", "MinYeong Park"], ["Buhyeon", "student", "Buhyeon Park"]])
 
 
+CST_STUDENTS = STUDENTS + [
+    ["Zena Kim", "Zena", "404-555-0208", "", "404-555-0209", "TRUE", "", "CST"],
+]
+
+FULL_NAME_TEACHERS = [
+    ["Joseph", "Joseph", "404-555-0102", "TRUE", "", "Mr. Joseph O'Hailey"],
+    ["Jeongbeen", "Jeongbeen", "404-555-0101", "TRUE", ""],
+]
+
+
+def zena_roster():
+    return build_roster(TEACHERS, CST_STUDENTS, [])
+
+
+def test_cst_student_time_shifted_and_labeled():
+    # Calendar 5-7 PM EST must read 4:00 PM - 6:00 PM (CST) in Zena's text.
+    ev = make_event("[TUT] Type: Online, Teacher Name: Joseph teacher, Student Name: Zena Kim, Subject: ACT Math", 17)
+    msgs = build_messages([ev], zena_roster())
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "Time: 4:00 PM - 6:00 PM (CST)" in g.body
+
+
+def test_cst_teacher_text_stays_est():
+    ev = make_event("[TUT] Type: Online, Teacher Name: Joseph teacher, Student Name: Zena Kim, Subject: ACT Math", 17)
+    msgs = build_messages([ev], zena_roster())
+    t = next(m for m in msgs if m.kind == "teacher")
+    assert "5:00 PM - 7:00 PM" in t.body
+    assert "(CST)" not in t.body
+
+
+def test_cst_multi_session_lines_shifted():
+    ev1 = make_event("[TUT] Type: Online, Teacher Name: Joseph teacher, Student Name: Zena Kim, Subject: ACT Math", 13, "e1")
+    ev2 = make_event("[TUT] Type: Online, Teacher Name: Jeongbeen teacher, Student Name: Zena Kim, Subject: English", 17, "e2")
+    msgs = build_messages([ev1, ev2], zena_roster())
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "- 12:00 PM - 2:00 PM (CST)" in g.body
+    assert "- 4:00 PM - 6:00 PM (CST)" in g.body
+
+
+def test_cst_shift_moves_the_date_too():
+    # Midnight EST session belongs to the previous day in CST.
+    ev = make_event("[TUT] Type: Online, Teacher Name: Joseph teacher, Student Name: Zena Kim, Subject: ACT Math", 0)
+    msgs = build_messages([ev], zena_roster())
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "Friday, July 31" in g.body
+
+
+def test_est_student_body_unchanged():
+    ev = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: Math", 15)
+    msgs = build_messages([ev], zena_roster())
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "Time: 3:00 PM - 5:00 PM" in g.body
+    assert "(" not in g.body.split("Time:")[1].splitlines()[0]
+
+
+def test_student_text_uses_teacher_full_name():
+    ev = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: Math", 15)
+    msgs = build_messages([ev], build_roster(FULL_NAME_TEACHERS, STUDENTS, []))
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "Teacher: Mr. Joseph O'Hailey" in g.body
+    t = next(m for m in msgs if m.kind == "teacher")
+    assert "Hi Joseph," in t.body        # the teacher's own greeting is untouched
+
+
+def test_student_multi_session_uses_teacher_full_name():
+    ev1 = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: Math", 13, "e1")
+    ev2 = make_event("[TUT] Type: In-Person, Teacher Name: Jeongbeen teacher, Student Name: Jian Choi, Subject: Bio", 15, "e2")
+    msgs = build_messages([ev1, ev2], build_roster(FULL_NAME_TEACHERS, STUDENTS, []))
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "with Mr. Joseph O'Hailey" in g.body
+    assert "with Jeongbeen" in g.body    # blank Full Name falls back to the calendar name
+
+
 def test_single_event_produces_teacher_and_group():
     ev = make_event(" [TUT] Type: In-Person (Room #1), Teacher Name: Joseph teacher, Student Name: Kyuheon (Andrew) Ahn, Subject: English", 13)
     msgs = build_messages([ev], roster())

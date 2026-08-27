@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from src import templates
 from src.roster import Roster
@@ -53,8 +54,25 @@ def _fmt_time(dt) -> str:
     return dt.strftime("%I:%M %p").lstrip("0")
 
 
-def _time_range(ev: TutEvent) -> str:
-    return f"{_fmt_time(ev.start)} - {_fmt_time(ev.end)}"
+# Hours to add to an EST clock time. Fixed offsets are safe year-round:
+# the US zones enter and leave daylight saving together.
+_TZ_SHIFT_FROM_EST = {"CST": -1, "MST": -2, "PST": -3}
+
+
+def _shift(dt, tz: str):
+    hours = _TZ_SHIFT_FROM_EST.get(tz)
+    return dt + timedelta(hours=hours) if hours else dt
+
+
+def _time_range(ev: TutEvent, tz: str = "") -> str:
+    suffix = f" ({tz})" if tz in _TZ_SHIFT_FROM_EST else ""
+    return f"{_fmt_time(_shift(ev.start, tz))} - {_fmt_time(_shift(ev.end, tz))}{suffix}"
+
+
+def _teacher_label(ev: TutEvent, teacher_labels: dict[str, str] | None) -> str:
+    if teacher_labels:
+        return teacher_labels.get(ev.teacher_name) or ev.teacher_name
+    return ev.teacher_name
 
 
 def _location_line(ev: TutEvent) -> str:
@@ -87,12 +105,13 @@ def _teacher_sessions_block(events: list[TutEvent]) -> str:
     return "\n".join(lines)
 
 
-def _student_sessions_block(events: list[TutEvent]) -> str:
+def _student_sessions_block(events: list[TutEvent], tz: str = "",
+                            teacher_labels: dict[str, str] | None = None) -> str:
     lines = []
     for ev in events:
         line = (
-            f"- {_time_range(ev)} - {ev.parsed.subject_clean or ev.subject}"
-            f" with {ev.teacher_name} ({ev.parsed.session_type})"
+            f"- {_time_range(ev, tz)} - {ev.parsed.subject_clean or ev.subject}"
+            f" with {_teacher_label(ev, teacher_labels)} ({ev.parsed.session_type})"
         )
         lines.append(line)
         if ev.parsed.is_online and ev.meet_link:
@@ -122,15 +141,16 @@ def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str
     ))
 
 
-def render_student_body(display_name: str, events: list[TutEvent], org_name: str) -> str:
+def render_student_body(display_name: str, events: list[TutEvent], org_name: str,
+                        tz: str = "", teacher_labels: dict[str, str] | None = None) -> str:
     if len(events) == 1:
         ev = events[0]
         return _tidy(templates.STUDENT_GROUP_SINGLE.format(
             recipient_name=display_name,
             org_name=org_name,
-            date_long=_fmt_date_long(ev.start),
-            time_range=_time_range(ev),
-            teacher_name=ev.teacher_name,
+            date_long=_fmt_date_long(_shift(ev.start, tz)),
+            time_range=_time_range(ev, tz),
+            teacher_name=_teacher_label(ev, teacher_labels),
             subject=ev.parsed.subject_clean or ev.subject,
             location_line=_location_line(ev),
             meet_line=_meet_line(ev),
@@ -138,9 +158,9 @@ def render_student_body(display_name: str, events: list[TutEvent], org_name: str
     return _tidy(templates.STUDENT_GROUP_MULTI.format(
         recipient_name=display_name,
         org_name=org_name,
-        date_long=_fmt_date_long(events[0].start),
+        date_long=_fmt_date_long(_shift(events[0].start, tz)),
         session_count=len(events),
-        sessions_block=_student_sessions_block(events),
+        sessions_block=_student_sessions_block(events, tz, teacher_labels),
     ))
 
 
@@ -228,6 +248,16 @@ def _build_student_messages(events, roster, merge, org_name, day_tag="") -> list
     # One group message per event containing ALL that event's students + parents
     # (user's explicit choice). Events whose recipient phone set is identical
     # merge into one message when merge=True.
+    # The exact printed teacher name, resolved once per distinct calendar name.
+    # Only student texts use it; the teacher's own greeting keeps Display Name.
+    teacher_labels: dict[str, str] = {}
+    for ev in events:
+        raw = ev.teacher_name
+        if raw and raw not in teacher_labels:
+            tmatch = roster.match_teacher(raw)
+            if tmatch.matched and tmatch.row.full_name:
+                teacher_labels[raw] = tmatch.row.full_name
+
     prelim: list[dict] = []
     for ev in events:
         if not ev.student_names:
@@ -236,12 +266,15 @@ def _build_student_messages(events, roster, merge, org_name, day_tag="") -> list
         display_names: list[str] = []
         badges, reasons = [], []
         norm_ids = []
+        tz = ""
         for raw_name in ev.student_names:
             match = roster.match_student(raw_name)
             norm_ids.append(match.norm_key or raw_name)
             if match.matched:
                 row = match.row
                 display_names.append(row.display_name)
+                if not tz and row.timezone in _TZ_SHIFT_FROM_EST:
+                    tz = row.timezone
                 if match.is_fuzzy:
                     badges.append(f'fuzzy match: "{raw_name}" -> "{row.calendar_name}"')
                 if row.student_phone:
@@ -277,6 +310,7 @@ def _build_student_messages(events, roster, merge, org_name, day_tag="") -> list
             "identity_norm": "+".join(sorted(norm_ids)),
             "badges": badges,
             "reasons": reasons,
+            "tz": tz,
         })
 
     # merge by identical recipient phone sets (only unblocked entries can merge safely)
@@ -286,6 +320,8 @@ def _build_student_messages(events, roster, merge, org_name, day_tag="") -> list
         gkey = f"{p['identity_norm']}|{phone_set}" if merge else f"{p['identity_norm']}|{p['event'].event_id}"
         g = groups.setdefault(gkey, {**p, "events": []})
         g["events"].append(p["event"])
+        if not g["tz"]:
+            g["tz"] = p["tz"]
         for b in p["badges"]:
             if b not in g["badges"]:
                 g["badges"].append(b)
@@ -302,7 +338,8 @@ def _build_student_messages(events, roster, merge, org_name, day_tag="") -> list
             if r.phone not in seen:
                 seen.add(r.phone)
                 recipients.append(r)
-        body = render_student_body(g["display"], evs, org_name)
+        body = render_student_body(g["display"], evs, org_name,
+                                   tz=g["tz"], teacher_labels=teacher_labels)
         phones = [r.phone for r in recipients]
         badges = list(g["badges"])
         if len(evs) > 1:
