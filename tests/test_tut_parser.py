@@ -96,6 +96,27 @@ def test_non_tut_title():
     assert not p.has_tut_tag
 
 
+def test_caws_tag_is_parsed():
+    p = parse_tut_title("[CAWS] Type: ONLINE, Teacher Name: Andy teacher, Student Name: Zena, Subject:  College Application")
+    assert p.has_tut_tag
+    assert p.program == "CAWS"
+    assert p.teacher_name == "Andy"
+    assert p.student_names == ["Zena"]
+
+
+def test_caws_lowercase_field_and_no_teacher_suffix():
+    # Real title from the calendar: lowercase "Teacher name:", no "teacher" suffix.
+    p = parse_tut_title("[CAWS] Type: ONLINE, Teacher name: Andy , Student Name: Yena, Subject: College Application (QB)")
+    assert p.has_tut_tag
+    assert p.teacher_name == "Andy"
+    assert p.student_names == ["Yena"]
+    assert p.subject_clean == "College Application"
+
+
+def test_tut_events_report_their_program():
+    assert parse_tut_title(T1).program == "TUT"
+
+
 def test_missing_fields_warn():
     p = parse_tut_title("[TUT] Type: Online, Subject: Math")
     assert p.has_tut_tag

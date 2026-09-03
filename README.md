@@ -1,6 +1,7 @@
 # Tutoring Reminder Texter
 
-날짜를 선택하면 Google Calendar(`andy.lee@eliteprep.com`)에서 `[TUT]` 수업을 찾아,
+날짜를 선택하면 Google Calendar(`andy.lee@eliteprep.com`)에서 `[TUT]` 수업과
+`[CAWS]` 대입 컨설팅 세션을 찾아,
 선생님(1:1)과 학생+부모님(그룹)에게 Google Voice로 영어 리마인드 문자를 보내는 앱.
 **보내기 전에 항상 목록을 검토하고, 받을 사람을 체크하고, 내용을 수정할 수 있습니다.**
 

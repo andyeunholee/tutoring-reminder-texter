@@ -246,10 +246,10 @@ for r in ss.day_results:
     cancelled_events = [e for e in day_events if e.is_cancelled]
 
     st.subheader(f"{d:%A}, {d:%B} {d.day} — {len(active_events)} tutoring session(s)")
-    st.caption(f"{r['total_scanned']} calendar events scanned, {len(day_events)} with [TUT].")
+    st.caption(f"{r['total_scanned']} calendar events scanned, {len(day_events)} with [TUT]/[CAWS].")
 
     if not day_events:
-        st.info(f"No [TUT] events found on {d}.")
+        st.info(f"No [TUT] or [CAWS] events found on {d}.")
         continue
 
     rows = []

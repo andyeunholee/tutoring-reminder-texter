@@ -8,7 +8,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-TUT_TAG_RE = re.compile(r"\[\s*TUT\s*\]", re.IGNORECASE)
+# [TUT] tutoring and [CAWS] college-application sessions share one title
+# format and one texting pipeline; only the wording of the texts differs.
+TUT_TAG_RE = re.compile(r"\[\s*(TUT|CAWS)\s*\]", re.IGNORECASE)
 CANCEL_RE = re.compile(r"(cancell?ed|cancel\b|취소|no[\s-]*show|reschedul)", re.IGNORECASE)
 FIELD_RE = re.compile(
     r"(?P<label>Type|Teacher\s*Name|Student\s*Name|Subject)\s*:\s*"
@@ -70,6 +72,7 @@ class ParsedTitle:
     student_names: list[str] = field(default_factory=list)
     subject: str = ""
     subject_clean: str = ""
+    program: str = ""   # "TUT" | "CAWS" (empty when has_tut_tag is False)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -79,6 +82,7 @@ def parse_tut_title(summary: str) -> ParsedTitle:
     if not tag_match:
         return ParsedTitle(has_tut_tag=False)
 
+    program = tag_match.group(1).upper()
     prefix = summary[: tag_match.start()]
     rest = summary[tag_match.end():]
 
@@ -130,6 +134,7 @@ def parse_tut_title(summary: str) -> ParsedTitle:
         student_names=student_names,
         subject=subject,
         subject_clean=subject_clean,
+        program=program,
         warnings=warnings,
     )
 

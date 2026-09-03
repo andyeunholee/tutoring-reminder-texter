@@ -69,6 +69,19 @@ def _time_range(ev: TutEvent, tz: str = "") -> str:
     return f"{_fmt_time(_shift(ev.start, tz))} - {_fmt_time(_shift(ev.end, tz))}{suffix}"
 
 
+_PROGRAM_LABELS = {"TUT": "tutoring", "CAWS": "College Application"}
+
+
+def _program_phrase(events: list[TutEvent]) -> str:
+    """What kind of session(s) the message is about, with a trailing space.
+
+    Empty when one merged message spans both programs: "Zena's sessions"
+    beats guessing which of the two labels to print.
+    """
+    labels = {_PROGRAM_LABELS.get(ev.parsed.program, "tutoring") for ev in events}
+    return f"{labels.pop()} " if len(labels) == 1 else ""
+
+
 def _teacher_label(ev: TutEvent, teacher_labels: dict[str, str] | None) -> str:
     if teacher_labels:
         return teacher_labels.get(ev.teacher_name) or ev.teacher_name
@@ -125,6 +138,7 @@ def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str
         return _tidy(templates.TEACHER_SINGLE.format(
             recipient_name=display_name,
             org_name=org_name,
+            program_phrase=_program_phrase(events),
             date_long=_fmt_date_long(ev.start),
             time_range=_time_range(ev),
             student_names=", ".join(ev.student_names),
@@ -135,6 +149,7 @@ def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str
     return _tidy(templates.TEACHER_MULTI.format(
         recipient_name=display_name,
         org_name=org_name,
+        program_phrase=_program_phrase(events),
         date_long=_fmt_date_long(events[0].start),
         session_count=len(events),
         sessions_block=_teacher_sessions_block(events),
@@ -148,6 +163,7 @@ def render_student_body(display_name: str, events: list[TutEvent], org_name: str
         return _tidy(templates.STUDENT_GROUP_SINGLE.format(
             recipient_name=display_name,
             org_name=org_name,
+            program_phrase=_program_phrase(events),
             date_long=_fmt_date_long(_shift(ev.start, tz)),
             time_range=_time_range(ev, tz),
             teacher_name=_teacher_label(ev, teacher_labels),
@@ -158,6 +174,7 @@ def render_student_body(display_name: str, events: list[TutEvent], org_name: str
     return _tidy(templates.STUDENT_GROUP_MULTI.format(
         recipient_name=display_name,
         org_name=org_name,
+        program_phrase=_program_phrase(events),
         date_long=_fmt_date_long(_shift(events[0].start, tz)),
         session_count=len(events),
         sessions_block=_student_sessions_block(events, tz, teacher_labels),

@@ -91,6 +91,32 @@ def test_est_student_body_unchanged():
     assert "(" not in g.body.split("Time:")[1].splitlines()[0]
 
 
+def test_caws_texts_say_college_application():
+    ev = make_event("[CAWS] Type: ONLINE, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: College Application", 15)
+    msgs = build_messages([ev], roster())
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "Jian Choi's College Application session" in g.body
+    t = next(m for m in msgs if m.kind == "teacher")
+    assert "your Elite Prep College Application session" in t.body
+
+
+def test_tut_texts_still_say_tutoring():
+    ev = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: Math", 15)
+    msgs = build_messages([ev], roster())
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "Jian Choi's tutoring session" in g.body
+
+
+def test_mixed_tut_caws_day_drops_the_qualifier():
+    ev1 = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: Math", 13, "e1")
+    ev2 = make_event("[CAWS] Type: ONLINE, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: College Application", 15, "e2")
+    msgs = build_messages([ev1, ev2], roster())
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "Jian Choi's sessions on" in g.body
+    t = next(m for m in msgs if m.kind == "teacher")
+    assert "your Elite Prep schedule for" in t.body
+
+
 def test_student_text_uses_teacher_full_name():
     ev = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: Math", 15)
     msgs = build_messages([ev], build_roster(FULL_NAME_TEACHERS, STUDENTS, []))
