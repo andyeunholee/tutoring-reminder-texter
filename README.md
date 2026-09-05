@@ -46,6 +46,11 @@
    캘린더에 적힌 이름이 시트 이름과 다르면 **Aliases 탭**에 매핑을 추가하세요:
    `캘린더에 적힌 이름 | student | 시트의 정확한 이름`
 
+   **선생님 문자의 `Student:` 줄**은 Tutoring Daily Sheet 프로젝트의 Students 시트
+   A열 표기를 씁니다 (`.env`의 `STUDENT_NAMES_SPREADSHEET_ID`). 캘린더에 `Daon` 이라고
+   적혀 있어도 문자에는 `Daon Yu` 로 나갑니다. 한 단어로 두 명 이상이 걸리면(`Kim`) 캘린더
+   표기를 그대로 둡니다. 학생·부모님 문자의 호칭은 이 시트와 무관하게 Display Name입니다.
+
 4. **Google Voice 로그인** — `login_google_voice.bat` 실행.
    브라우저가 열리면 Google Voice 번호를 가진 계정으로 로그인하고,
    **문자 목록이 보일 때까지 기다렸다가 창을 닫으세요.** 스크립트가 자동으로

@@ -18,6 +18,7 @@ import config
 from src.auth import get_credentials
 from src.calendar_service import TutoringCalendarService
 from src.coverage_window import coverage_days, resolve_window
+from src.canonical_names import EMPTY as NO_CANONICAL_NAMES, load_canonical_names
 from src.message_builder import build_messages
 from src.roster import RosterUnavailable, load_roster
 from sms.gv_sender import normalize_phone_number
@@ -64,6 +65,11 @@ def cached_roster(spreadsheet_id: str):
             "aliases": config.ROSTER_ALIASES_RANGE,
         },
     )
+
+
+@st.cache_data(ttl=300, show_spinner="Loading student names...")
+def cached_student_names(spreadsheet_id: str):
+    return load_canonical_names(google_creds(), spreadsheet_id, config.STUDENT_NAMES_RANGE)
 
 
 # ---------- session state ----------
@@ -209,6 +215,16 @@ except Exception as e:
 if roster.load_errors:
     st.warning("Roster issues: " + "; ".join(roster.load_errors))
 
+# Full student names for the teacher texts. Optional: without the sheet, or
+# if it cannot be read right now, teacher texts fall back to calendar names.
+canonical_students = NO_CANONICAL_NAMES
+if config.STUDENT_NAMES_SPREADSHEET_ID:
+    try:
+        canonical_students = cached_student_names(config.STUDENT_NAMES_SPREADSHEET_ID)
+    except Exception as e:
+        st.warning("Student names sheet could not be read; teacher texts will use "
+                   f"the calendar's spelling. ({e})")
+
 messages_by_day: list[tuple[date, list]] = []
 for r in ss.day_results:
     day_msgs = build_messages(
@@ -218,6 +234,7 @@ for r in ss.day_results:
         include_cancelled=include_cancelled,
         org_name=config.ORG_NAME,
         day_tag=r["day"].isoformat(),
+        canonical_students=canonical_students,
     )
     if not send_teachers:
         day_msgs = [m for m in day_msgs if m.kind != "teacher"]

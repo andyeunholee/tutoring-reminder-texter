@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from src import templates
+from src.canonical_names import CanonicalNames
 from src.roster import Roster
 from src.tut_parser import TutEvent
 
@@ -107,10 +108,11 @@ def _tidy(body: str) -> str:
     return body.strip()
 
 
-def _teacher_sessions_block(events: list[TutEvent]) -> str:
+def _teacher_sessions_block(events: list[TutEvent], student_label=None) -> str:
     lines = []
     for ev in events:
-        students = ", ".join(ev.student_names) or "(no student parsed)"
+        names = student_label(ev.student_names) if student_label else ev.student_names
+        students = ", ".join(names) or "(no student parsed)"
         line = f"- {_time_range(ev)} - {students} - {ev.subject} ({ev.parsed.session_type})"
         lines.append(line)
         if ev.parsed.is_online and ev.meet_link:
@@ -132,16 +134,20 @@ def _student_sessions_block(events: list[TutEvent], tz: str = "",
     return "\n".join(lines)
 
 
-def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str) -> str:
+def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str,
+                        student_label=None) -> str:
+    """student_label maps the calendar's student names to what the text
+    should print; None keeps the calendar spelling."""
     if len(events) == 1:
         ev = events[0]
+        names = student_label(ev.student_names) if student_label else ev.student_names
         return _tidy(templates.TEACHER_SINGLE.format(
             recipient_name=display_name,
             org_name=org_name,
             program_phrase=_program_phrase(events),
             date_long=_fmt_date_long(ev.start),
             time_range=_time_range(ev),
-            student_names=", ".join(ev.student_names),
+            student_names=", ".join(names),
             subject=ev.subject,
             location_line=_location_line(ev),
             meet_line=_meet_line(ev),
@@ -152,7 +158,7 @@ def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str
         program_phrase=_program_phrase(events),
         date_long=_fmt_date_long(events[0].start),
         session_count=len(events),
-        sessions_block=_teacher_sessions_block(events),
+        sessions_block=_teacher_sessions_block(events, student_label),
     ))
 
 
@@ -189,19 +195,26 @@ def build_messages(
     include_cancelled: bool = False,
     org_name: str = "Elite Prep",
     day_tag: str = "",
+    canonical_students: CanonicalNames | None = None,
 ) -> list[OutboundMessage]:
     active = [e for e in events if include_cancelled or not e.is_cancelled]
     active.sort(key=lambda e: e.start)
 
+    # Teacher texts name students the way the director's roster does, when a
+    # roster is provided. Student texts keep greeting by Display Name.
+    student_label = canonical_students.resolve_all if canonical_students else None
+
     messages: list[OutboundMessage] = []
     messages.extend(
-        _build_teacher_messages(active, roster, merge_sessions_per_recipient, org_name, day_tag))
+        _build_teacher_messages(active, roster, merge_sessions_per_recipient, org_name, day_tag,
+                                student_label))
     messages.extend(
         _build_student_messages(active, roster, merge_sessions_per_recipient, org_name, day_tag))
     return messages
 
 
-def _build_teacher_messages(events, roster, merge, org_name, day_tag="") -> list[OutboundMessage]:
+def _build_teacher_messages(events, roster, merge, org_name, day_tag="",
+                            student_label=None) -> list[OutboundMessage]:
     groups: dict[str, dict] = {}
     for ev in events:
         raw_name = ev.teacher_name
@@ -243,7 +256,7 @@ def _build_teacher_messages(events, roster, merge, org_name, day_tag="") -> list
                 f"Add it to the Teachers tab or map it in Aliases."
             )
 
-        body = render_teacher_body(display, evs, org_name)
+        body = render_teacher_body(display, evs, org_name, student_label)
         phones = [r.phone for r in recipients]
         out.append(OutboundMessage(
             key=message_key("teacher", match.norm_key or raw_name, phones, day_tag),

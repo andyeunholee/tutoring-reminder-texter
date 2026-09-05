@@ -63,6 +63,13 @@ ROSTER_TEACHERS_RANGE = "Teachers!A2:F"   # F = Name in Student Texts
 ROSTER_STUDENTS_RANGE = "Students!A2:H"   # H = Time Zone
 ROSTER_ALIASES_RANGE = "Aliases!A2:C"
 
+# --- Student names for teacher texts ---
+# Column A of the Tutoring Daily Sheet's Students roster: the full names the
+# director uses. Teacher reminders print these instead of the calendar's short
+# forms ("Daon" -> "Daon Yu"). Leave blank to keep calendar names.
+STUDENT_NAMES_SPREADSHEET_ID = os.getenv("STUDENT_NAMES_SPREADSHEET_ID", "")
+STUDENT_NAMES_RANGE = "Students!A2:A"
+
 # --- Google Voice sender ---
 # Keep the browser profile on a local disk: Google Drive's virtual filesystem
 # corrupts Chrome profile locks, and Google blocks sign-in from the bundled
