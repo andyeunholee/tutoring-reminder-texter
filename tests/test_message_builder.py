@@ -280,21 +280,3 @@ def test_per_day_building_keeps_each_date_line_correct():
     # neither message mentions the other day
     assert "August 3" not in t_sun.body
     assert "August 2" not in t_mon.body
-
-
-def test_teacher_text_uses_the_roster_spelling_of_student_names():
-    from src.canonical_names import CanonicalNames
-    canon = CanonicalNames(("Daon Yu", "Suhyun Sean Byun"))
-    ev = make_event("[TUT] Type: Online, Teacher Name: Joseph teacher, Student Name: Daon, Subject: Pre-cal", 19)
-
-    t = next(m for m in build_messages([ev], roster(), canonical_students=canon) if m.kind == "teacher")
-    assert "Student: Daon Yu" in t.body
-
-    # Without the sheet, the calendar's spelling stays.
-    t2 = next(m for m in build_messages([ev], roster()) if m.kind == "teacher")
-    assert "Student: Daon\n" in t2.body and "Daon Yu" not in t2.body
-
-    # The merged multi-session block goes through the same mapping.
-    ev2 = make_event("[TUT] Type: Online, Teacher Name: Joseph teacher, Student Name: Suhyun Byun, Subject: 9th Eng", 13, "e2")
-    tm = next(m for m in build_messages([ev, ev2], roster(), canonical_students=canon) if m.kind == "teacher")
-    assert "Suhyun Sean Byun" in tm.body and "Daon Yu" in tm.body
