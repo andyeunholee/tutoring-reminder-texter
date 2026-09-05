@@ -88,6 +88,12 @@ def _teacher_label(ev: TutEvent, teacher_labels: dict[str, str] | None) -> str:
     return ev.teacher_name
 
 
+def _student_label(name: str, student_labels: dict[str, str] | None) -> str:
+    if student_labels:
+        return student_labels.get(name) or name
+    return name
+
+
 def _location_line(ev: TutEvent) -> str:
     if ev.parsed.is_online:
         return "Format: Online"
@@ -107,10 +113,12 @@ def _tidy(body: str) -> str:
     return body.strip()
 
 
-def _teacher_sessions_block(events: list[TutEvent]) -> str:
+def _teacher_sessions_block(events: list[TutEvent],
+                            student_labels: dict[str, str] | None = None) -> str:
     lines = []
     for ev in events:
-        students = ", ".join(ev.student_names) or "(no student parsed)"
+        students = ", ".join(
+            _student_label(n, student_labels) for n in ev.student_names) or "(no student parsed)"
         line = f"- {_time_range(ev)} - {students} - {ev.subject} ({ev.parsed.session_type})"
         lines.append(line)
         if ev.parsed.is_online and ev.meet_link:
@@ -132,7 +140,8 @@ def _student_sessions_block(events: list[TutEvent], tz: str = "",
     return "\n".join(lines)
 
 
-def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str) -> str:
+def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str,
+                        student_labels: dict[str, str] | None = None) -> str:
     if len(events) == 1:
         ev = events[0]
         return _tidy(templates.TEACHER_SINGLE.format(
@@ -141,7 +150,7 @@ def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str
             program_phrase=_program_phrase(events),
             date_long=_fmt_date_long(ev.start),
             time_range=_time_range(ev),
-            student_names=", ".join(ev.student_names),
+            student_names=", ".join(_student_label(n, student_labels) for n in ev.student_names),
             subject=ev.subject,
             location_line=_location_line(ev),
             meet_line=_meet_line(ev),
@@ -152,7 +161,7 @@ def render_teacher_body(display_name: str, events: list[TutEvent], org_name: str
         program_phrase=_program_phrase(events),
         date_long=_fmt_date_long(events[0].start),
         session_count=len(events),
-        sessions_block=_teacher_sessions_block(events),
+        sessions_block=_teacher_sessions_block(events, student_labels),
     ))
 
 
@@ -202,6 +211,17 @@ def build_messages(
 
 
 def _build_teacher_messages(events, roster, merge, org_name, day_tag="") -> list[OutboundMessage]:
+    # Teachers see students named the way the roster's column A spells them
+    # ("Suhyun Byun" -> "Suhyun Sean Byun"). Unmatched names keep the calendar
+    # spelling: a wrong full name is worse than a short one.
+    student_labels: dict[str, str] = {}
+    for ev in events:
+        for raw in ev.student_names:
+            if raw not in student_labels:
+                smatch = roster.match_student(raw)
+                if smatch.matched:
+                    student_labels[raw] = smatch.row.calendar_name
+
     groups: dict[str, dict] = {}
     for ev in events:
         raw_name = ev.teacher_name
@@ -243,7 +263,7 @@ def _build_teacher_messages(events, roster, merge, org_name, day_tag="") -> list
                 f"Add it to the Teachers tab or map it in Aliases."
             )
 
-        body = render_teacher_body(display, evs, org_name)
+        body = render_teacher_body(display, evs, org_name, student_labels)
         phones = [r.phone for r in recipients]
         out.append(OutboundMessage(
             key=message_key("teacher", match.norm_key or raw_name, phones, day_tag),

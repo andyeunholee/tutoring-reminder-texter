@@ -91,6 +91,39 @@ def test_est_student_body_unchanged():
     assert "(" not in g.body.split("Time:")[1].splitlines()[0]
 
 
+def test_teacher_text_uses_roster_column_a_name():
+    r = build_roster(TEACHERS, STUDENTS + [["Suhyun Sean Byun", "Sean", "404-555-0401", "", "404-555-0402", "TRUE", ""]], [])
+    ev = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Suhyun Byun, Subject: 9th Eng", 15)
+    msgs = build_messages([ev], r)
+    t = next(m for m in msgs if m.kind == "teacher")
+    assert "Student: Suhyun Sean Byun" in t.body
+
+
+def test_teacher_multi_block_uses_roster_column_a_name():
+    r = build_roster(TEACHERS, STUDENTS + [["Suhyun Sean Byun", "Sean", "404-555-0401", "", "404-555-0402", "TRUE", ""]], [])
+    ev1 = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Suhyun Byun, Subject: 9th Eng", 13, "e1")
+    ev2 = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Jian, Subject: Math", 15, "e2")
+    msgs = build_messages([ev1, ev2], r)
+    t = next(m for m in msgs if m.kind == "teacher")
+    assert "- 1:00 PM - 3:00 PM - Suhyun Sean Byun - 9th Eng" in t.body
+    assert "- 3:00 PM - 5:00 PM - Jian Choi - Math" in t.body
+
+
+def test_teacher_text_keeps_unmatched_calendar_name():
+    ev = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Nobody Known, Subject: Math", 15)
+    msgs = build_messages([ev], roster())
+    t = next(m for m in msgs if m.kind == "teacher")
+    assert "Student: Nobody Known" in t.body
+
+
+def test_student_text_still_greets_by_display_name():
+    r = build_roster(TEACHERS, STUDENTS + [["Suhyun Sean Byun", "Sean", "404-555-0401", "", "404-555-0402", "TRUE", ""]], [])
+    ev = make_event("[TUT] Type: In-Person, Teacher Name: Joseph teacher, Student Name: Suhyun Byun, Subject: 9th Eng", 15)
+    msgs = build_messages([ev], r)
+    g = next(m for m in msgs if m.kind == "student_group")
+    assert "about Sean's tutoring session" in g.body
+
+
 def test_caws_texts_say_college_application():
     ev = make_event("[CAWS] Type: ONLINE, Teacher Name: Joseph teacher, Student Name: Jian Choi, Subject: College Application", 15)
     msgs = build_messages([ev], roster())
